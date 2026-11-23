@@ -4,7 +4,7 @@ REPORT  := tests/target/karate-reports/karate-summary.html
 PORT    ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help install run stop logs test lint check clean check-docker
+.PHONY: help install run stop logs test postman lint check clean check-docker
 
 help: ## Muestra los comandos disponibles
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-8s %s\n", $$1, $$2}'
@@ -32,10 +32,15 @@ test: check-docker ## Ejecuta las pruebas Karate contra el mock y abre el report
 	  if [ -z "$$CI" ]; then open $(REPORT) 2>/dev/null || echo "Reporte: $(REPORT)"; fi; \
 	  exit $$status
 
+postman: check-docker ## Ejecuta la colección Postman contra el mock (Newman en Docker)
+	$(COMPOSE) --profile test run --rm newman; status=$$?; \
+	  $(COMPOSE) --profile test down >/dev/null 2>&1; \
+	  exit $$status
+
 lint: check-docker ## Valida el contrato OpenAPI (Redocly)
 	docker run --rm -v "$(CURDIR):/spec" -w /spec $(REDOCLY) lint openapi/pagos.yaml
 
-check: lint test ## Lo mismo que ejecuta CI: contrato + pruebas
+check: lint test postman ## Lo mismo que ejecuta CI: contrato + Karate + Postman
 
 clean: stop ## Elimina reportes e imágenes locales
 	rm -rf tests/target
