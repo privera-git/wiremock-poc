@@ -1,0 +1,16 @@
+{
+  "name": "Falla: respuesta vacía",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "empty-response"
+      }
+    }
+  },
+  "response": {
+    "fault": "EMPTY_RESPONSE"
+  }
+}

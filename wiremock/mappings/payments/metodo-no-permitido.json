@@ -1,0 +1,18 @@
+{
+  "name": "/payments: método no permitido (405)",
+  "priority": 9,
+  "request": {
+    "urlPathPattern": "/payments(/.*)?",
+    "method": "ANY"
+  },
+  "response": {
+    "status": 405,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "METODO_NO_PERMITIDO",
+      "error": "método no permitido para este recurso"
+    }
+  }
+}

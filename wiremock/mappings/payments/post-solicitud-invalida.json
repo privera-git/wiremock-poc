@@ -1,0 +1,18 @@
+{
+  "name": "POST /payments: cuerpo inválido o incompleto (400)",
+  "priority": 8,
+  "request": {
+    "url": "/payments",
+    "method": "POST"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "SOLICITUD_INVALIDA",
+      "error": "cuerpo de la solicitud inválido"
+    }
+  }
+}

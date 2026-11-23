@@ -1,0 +1,23 @@
+{
+  "name": "Falla: error interno (500)",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "error-500"
+      }
+    }
+  },
+  "response": {
+    "status": 500,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "ERROR_INTERNO",
+      "error": "error interno"
+    }
+  }
+}

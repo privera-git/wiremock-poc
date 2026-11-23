@@ -1,0 +1,24 @@
+{
+  "name": "Falla: servicio no disponible (503)",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "unavailable-503"
+      }
+    }
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/json",
+      "Retry-After": "30"
+    },
+    "jsonBody": {
+      "code": "SERVICIO_NO_DISPONIBLE",
+      "error": "servicio temporalmente no disponible"
+    }
+  }
+}

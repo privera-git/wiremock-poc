@@ -1,0 +1,29 @@
+{
+  "name": "POST /payments: moneda distinta de CLP (400)",
+  "priority": 4,
+  "request": {
+    "url": "/payments",
+    "method": "POST",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$.currency"
+      },
+      {
+        "matchesJsonPath": {
+          "expression": "$.currency",
+          "doesNotMatch": "^CLP$"
+        }
+      }
+    ]
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "MONEDA_NO_SOPORTADA",
+      "error": "moneda no soportada"
+    }
+  }
+}

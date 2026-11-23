@@ -1,0 +1,26 @@
+{
+  "name": "POST /payments: monto con decimales (400)",
+  "priority": 3,
+  "request": {
+    "url": "/payments",
+    "method": "POST",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": {
+          "expression": "$.amount",
+          "matches": "^-?[0-9]+\\.[0-9]+$"
+        }
+      }
+    ]
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "MONTO_NO_ENTERO",
+      "error": "el monto debe ser un entero (CLP no admite decimales)"
+    }
+  }
+}

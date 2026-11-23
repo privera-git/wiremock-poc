@@ -1,0 +1,16 @@
+{
+  "name": "Falla: respuesta corrupta",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "malformed-response"
+      }
+    }
+  },
+  "response": {
+    "fault": "MALFORMED_RESPONSE_CHUNK"
+  }
+}

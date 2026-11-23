@@ -1,0 +1,20 @@
+{
+  "name": "GET /payments/abcd-1234-0002: pago REJECTED (200)",
+  "priority": 5,
+  "request": {
+    "urlPath": "/payments/abcd-1234-0002",
+    "method": "GET"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "id": "abcd-1234-0002",
+      "amount": 2500,
+      "currency": "CLP",
+      "status": "REJECTED"
+    }
+  }
+}
