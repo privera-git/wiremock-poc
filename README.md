@@ -7,6 +7,7 @@ Esta prueba de concepto muestra cómo simular una dependencia HTTP **de forma co
 - Contrato: [`openapi/pagos.yaml`](openapi/pagos.yaml) (OpenAPI 3.0.3).
 - Stubs: [`wiremock/mappings/`](wiremock/mappings/), con un archivo por caso.
 - Evidencia: [`tests/features/`](tests/features/), donde 35 escenarios Karate verifican cada caso descrito abajo.
+- Colección Postman: [`postman/`](postman/), una alternativa a Karate para probar manualmente o con Newman (ver [Probar con Postman](#probar-con-postman)).
 - Imagen: `priveradocker/wiremock-poc` en Docker Hub (`linux/amd64` y `linux/arm64`).
 
 ## Uso rápido
@@ -16,8 +17,9 @@ Requisito único: Docker (Desktop o Engine con Compose v2).
 ```bash
 make run     # levanta el mock en http://localhost:8080
 make test    # ejecuta las pruebas Karate y abre el reporte HTML
+make postman # ejecuta la colección Postman con Newman (sin instalar Postman)
 make lint    # valida el contrato OpenAPI
-make check   # lint + test (lo mismo que ejecuta CI)
+make check   # lint + Karate + Postman (lo mismo que ejecuta CI)
 make stop    # detiene todo
 make help    # lista todos los comandos
 ```
@@ -113,6 +115,50 @@ curl -i -H 'X-Mock-Fault: unavailable-503' http://localhost:8080/payments/abcd-1
 
 > **Detrás de un proxy o balanceador** (Cloud Run, Ingress, API Gateway), las tres fallas de conexión (`connection-reset`, `empty-response`, `malformed-response`) las intercepta el proxy. El cliente probablemente recibirá un `502`/`503` del proxy en lugar del corte de conexión. Las fallas HTTP (`500`, `503`, `429`, `timeout`) llegan intactas.
 
+## Probar con Postman
+
+La carpeta [`postman/`](postman/) tiene dos archivos:
+
+| Archivo | Contenido |
+| --- | --- |
+| `wiremock-poc.postman_collection.json` | 36 solicitudes en 5 carpetas, con las mismas verificaciones que Karate (pestaña *Tests*) |
+| `cloud-run.postman_environment.json` | Plantilla de environment con `baseUrl` e `idToken` para apuntar a Cloud Run |
+
+**En Postman (manual):**
+
+1. *Import* → seleccionar los dos archivos.
+2. Contra el mock local (`make run`): no hace falta seleccionar environment, porque la colección usa `http://localhost:8080` por defecto.
+3. Contra Cloud Run: seleccionar el environment **wiremock-poc — Cloud Run** y completar `baseUrl` con la URL del servicio.
+   - Si el servicio exige autenticación, pegar en `idToken` el resultado de `gcloud auth print-identity-token`. La colección agrega el header `Authorization: Bearer ...` solo cuando `idToken` tiene valor. El token dura una hora.
+4. Ejecutar una solicitud o la colección completa (*Run collection*).
+
+| Carpeta | Qué prueba |
+| --- | --- |
+| 1. Salud | `/health` y `404` en rutas no definidas |
+| 2. Registrar pago | Éxito, límites 1 / 10.000.000 / máximo + 1 y todas las validaciones del cuerpo |
+| 3. Consultar pago | Datos semilla, `404`, formato de id y `405` |
+| 4. Fallas HTTP | `500`, `503`, `429`, `timeout` (tarda 10 s) y valor desconocido del header |
+| 5. Fallas de conexión | `connection-reset`, `empty-response`, `malformed-response`. **Sin aserciones:** el error de Postman (`socket hang up`, `ECONNRESET`) es el resultado esperado |
+
+**Por línea de comandos (Newman, sin instalar nada aparte de Docker):**
+
+```bash
+make postman                          # contra el mock local, carpetas 1 a 4
+```
+
+Contra una URL desplegada:
+
+```bash
+docker run --rm -v "$PWD/postman:/etc/newman" postman/newman:6.1.3-alpine \
+  run wiremock-poc.postman_collection.json \
+  --env-var baseUrl=https://URL-DE-CLOUD-RUN \
+  --env-var idToken="$(gcloud auth print-identity-token)" \
+  --folder "1. Salud" --folder "2. Registrar pago (POST /payments)" \
+  --folder "3. Consultar pago (GET /payments/{id})" --folder "4. Fallas HTTP (X-Mock-Fault)"
+```
+
+Omitir `idToken` si el servicio es público.
+
 ## Estructura
 
 ```
@@ -123,11 +169,12 @@ wiremock/mappings/
   health/                   /health
   catch-all.json            404 para rutas no definidas
 tests/features/             Pruebas Karate (evidencia de cada caso)
+postman/                    Colección Postman + environment de Cloud Run (alternativa a Karate)
 Dockerfile                  Imagen: wiremock/wiremock:3.13.2 + stubs, usuario sin privilegios
 redocly.yaml                Reglas de lint del contrato
 ```
 
-Para agregar un caso: crear un JSON en `wiremock/mappings/`, documentarlo en `openapi/pagos.yaml` y en este README, agregar su escenario en `tests/features/` y ejecutar `make check`.
+Para agregar un caso: crear un JSON en `wiremock/mappings/`, documentarlo en `openapi/pagos.yaml` y en este README, agregar su escenario en `tests/features/` y su solicitud en la colección Postman, y ejecutar `make check`.
 
 ## CI y publicación
 
@@ -135,7 +182,7 @@ El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) hace lo sigui
 
 | Evento | Qué hace |
 | --- | --- |
-| Pull request a `main` / push a `main` | Lint del contrato + pruebas Karate. **No publica** |
+| Pull request a `main` / push a `main` | Lint del contrato + pruebas Karate + colección Postman (Newman). **No publica** |
 | Tag `vX.Y.Z` sobre un commit de `main` | Lo anterior + build multi-arquitectura + push a Docker Hub con tags `X.Y.Z` y `latest` |
 
 Un tag de pre-release (`v1.2.0-rc.1`) publica solo `1.2.0-rc.1`, sin `latest`. Un tag que no apunte a un commit de `main` hace fallar el job.

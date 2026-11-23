@@ -1,0 +1,1271 @@
+{
+  "info": {
+    "_postman_id": "f40a1f9d-a02c-52f9-901c-5e17a68168a3",
+    "name": "wiremock-poc — API de Pagos (mock)",
+    "description": "Colección equivalente a las pruebas Karate del repo. Cada solicitud incluye aserciones (pestaña Tests).\n\nVariables de colección:\n- `baseUrl`: URL del mock (por defecto http://localhost:8080; reemplazar por la URL de Cloud Run).\n- `idToken`: opcional. Solo si el servicio de Cloud Run exige autenticación: pegar el resultado de `gcloud auth print-identity-token`.\n\nContrato: openapi/pagos.yaml. Detalle de errores y casos de borde: README.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Agrega el token de identidad de GCP solo si se configuró (Cloud Run con autenticación).",
+          "const token = pm.collectionVariables.get('idToken') || pm.environment.get('idToken');",
+          "if (token) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token }); }"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Toda respuesta de error debe cumplir el esquema Error del contrato: { code, error }.",
+          "if (pm.response.code >= 400) {",
+          "  pm.test('cuerpo de error cumple el esquema { code, error }', () => {",
+          "    const b = pm.response.json();",
+          "    pm.expect(b.code).to.be.a('string');",
+          "    pm.expect(b.error).to.be.a('string');",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "idToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Salud",
+      "description": "Disponibilidad del mock y respuesta para rutas no definidas.",
+      "item": [
+        {
+          "name": "GET /health → 200 UP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status UP', () => pm.expect(pm.response.json()).to.eql({status: 'UP'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta no definida → 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ruta-inexistente",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ruta-inexistente"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = RECURSO_NO_ENCONTRADO', () => pm.expect(pm.response.json().code).to.eql('RECURSO_NO_ENCONTRADO'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Registrar pago (POST /payments)",
+      "description": "Éxito, límites del rango (1 y 10.000.000) y validaciones del cuerpo.",
+      "item": [
+        {
+          "name": "Válido: monto mínimo (1) → 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 1, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('id con formato xxxx-xxxx-xxxx', () => pm.expect(b.id).to.match(/^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}$/));",
+                  "pm.test('amount = 1, currency CLP, status PENDING', () => pm.expect(b).to.include({amount: 1, currency: 'CLP', status: 'PENDING'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Válido: 15000 → 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('id con formato xxxx-xxxx-xxxx', () => pm.expect(b.id).to.match(/^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}$/));",
+                  "pm.test('amount = 15000, currency CLP, status PENDING', () => pm.expect(b).to.include({amount: 15000, currency: 'CLP', status: 'PENDING'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Válido: monto máximo (10000000) → 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 10000000, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('id con formato xxxx-xxxx-xxxx', () => pm.expect(b.id).to.match(/^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}$/));",
+                  "pm.test('amount = 10000000, currency CLP, status PENDING', () => pm.expect(b).to.include({amount: 10000000, currency: 'CLP', status: 'PENDING'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto 0 → 400 MONTO_INVALIDO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 0, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONTO_INVALIDO', () => pm.expect(pm.response.json().code).to.eql('MONTO_INVALIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto negativo → 400 MONTO_INVALIDO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": -100, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONTO_INVALIDO', () => pm.expect(pm.response.json().code).to.eql('MONTO_INVALIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Máximo + 1 → 422 MONTO_EXCEDE_LIMITE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 10000001, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('code = MONTO_EXCEDE_LIMITE', () => pm.expect(pm.response.json().code).to.eql('MONTO_EXCEDE_LIMITE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto con decimales → 400 MONTO_NO_ENTERO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000.5, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONTO_NO_ENTERO', () => pm.expect(pm.response.json().code).to.eql('MONTO_NO_ENTERO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Entero escrito con decimal (15000.0) → 400 MONTO_NO_ENTERO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000.0, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONTO_NO_ENTERO', () => pm.expect(pm.response.json().code).to.eql('MONTO_NO_ENTERO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Moneda USD → 400 MONEDA_NO_SOPORTADA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000, \"currency\": \"USD\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONEDA_NO_SOPORTADA', () => pm.expect(pm.response.json().code).to.eql('MONEDA_NO_SOPORTADA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Moneda en minúsculas (clp) → 400 MONEDA_NO_SOPORTADA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000, \"currency\": \"clp\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONEDA_NO_SOPORTADA', () => pm.expect(pm.response.json().code).to.eql('MONEDA_NO_SOPORTADA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Varios errores (0 + USD): gana el monto → 400 MONTO_INVALIDO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 0, \"currency\": \"USD\"}"
+            },
+            "description": "Precedencia: la validación del monto se evalúa antes que la de moneda."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = MONTO_INVALIDO', () => pm.expect(pm.response.json().code).to.eql('MONTO_INVALIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto como texto → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": \"15000\", \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto nulo → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": null, \"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin moneda → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\": 15000}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin monto → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"currency\": \"CLP\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Objeto vacío → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cuerpo que no es JSON → 400 SOLICITUD_INVALIDA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "esto no es json"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = SOLICITUD_INVALIDA', () => pm.expect(pm.response.json().code).to.eql('SOLICITUD_INVALIDA'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Consultar pago (GET /payments/{id})",
+      "description": "Datos semilla, pago inexistente, formato de id y métodos no permitidos.",
+      "item": [
+        {
+          "name": "Semilla PENDING (abcd-1234-0001) → 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-0001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-0001"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pago PENDING', () => pm.expect(pm.response.json()).to.eql({id: 'abcd-1234-0001', amount: 8000, currency: 'CLP', status: 'PENDING'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Semilla APPROVED (abcd-1234-6789) → 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pago APPROVED', () => pm.expect(pm.response.json()).to.eql({id: 'abcd-1234-6789', amount: 15000, currency: 'CLP', status: 'APPROVED'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Semilla REJECTED (abcd-1234-0002) → 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-0002",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-0002"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pago REJECTED', () => pm.expect(pm.response.json()).to.eql({id: 'abcd-1234-0002', amount: 2500, currency: 'CLP', status: 'REJECTED'}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id válido sin pago → 404 PAGO_NO_ENCONTRADO",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/ffff-0000-0000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "ffff-0000-0000"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = PAGO_NO_ENCONTRADO', () => pm.expect(pm.response.json().code).to.eql('PAGO_NO_ENCONTRADO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id en mayúsculas → 400 ID_INVALIDO",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/ABCD-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "ABCD-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = ID_INVALIDO', () => pm.expect(pm.response.json().code).to.eql('ID_INVALIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Id con formato inválido → 400 ID_INVALIDO",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/xyz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "xyz"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = ID_INVALIDO', () => pm.expect(pm.response.json().code).to.eql('ID_INVALIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE → 405 METODO_NO_PERMITIDO",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 405', () => pm.response.to.have.status(405));",
+                  "pm.test('code = METODO_NO_PERMITIDO', () => pm.expect(pm.response.json().code).to.eql('METODO_NO_PERMITIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT → 405 METODO_NO_PERMITIDO",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 405', () => pm.response.to.have.status(405));",
+                  "pm.test('code = METODO_NO_PERMITIDO', () => pm.expect(pm.response.json().code).to.eql('METODO_NO_PERMITIDO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /payments (listar) → 405 METODO_NO_PERMITIDO",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 405', () => pm.response.to.have.status(405));",
+                  "pm.test('code = METODO_NO_PERMITIDO', () => pm.expect(pm.response.json().code).to.eql('METODO_NO_PERMITIDO'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Fallas HTTP (X-Mock-Fault)",
+      "description": "Fallas inyectadas con el header X-Mock-Fault que llegan como respuesta HTTP. También pasan a través de proxies (Cloud Run).",
+      "item": [
+        {
+          "name": "error-500 → 500 ERROR_INTERNO",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "error-500"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 500', () => pm.response.to.have.status(500));",
+                  "pm.test('code = ERROR_INTERNO', () => pm.expect(pm.response.json().code).to.eql('ERROR_INTERNO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "unavailable-503 → 503 + Retry-After 30",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "unavailable-503"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 503', () => pm.response.to.have.status(503));",
+                  "pm.test('code = SERVICIO_NO_DISPONIBLE', () => pm.expect(pm.response.json().code).to.eql('SERVICIO_NO_DISPONIBLE'));",
+                  "pm.test('Retry-After = 30', () => pm.expect(pm.response.headers.get('Retry-After')).to.eql('30'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "rate-limit-429 → 429 + Retry-After 60",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "rate-limit-429"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 429', () => pm.response.to.have.status(429));",
+                  "pm.test('code = LIMITE_EXCEDIDO', () => pm.expect(pm.response.json().code).to.eql('LIMITE_EXCEDIDO'));",
+                  "pm.test('Retry-After = 60', () => pm.expect(pm.response.headers.get('Retry-After')).to.eql('60'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "timeout → 504 después de 10 s",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "timeout"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            },
+            "description": "Para ver el corte del lado del cliente, configurar en Postman (Settings → Request timeout) un valor menor a 10000 ms."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 504', () => pm.response.to.have.status(504));",
+                  "pm.test('code = TIEMPO_AGOTADO', () => pm.expect(pm.response.json().code).to.eql('TIEMPO_AGOTADO'));",
+                  "pm.test('tardó al menos 10 s', () => pm.expect(pm.response.responseTime).to.be.at.least(10000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Valor desconocido se ignora → 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "no-existe"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('respuesta normal', () => pm.expect(pm.response.json().status).to.eql('APPROVED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Fallas de conexión (sin aserciones)",
+      "description": "Estas solicitudes NO reciben una respuesta HTTP válida: Postman mostrará un error (por ejemplo 'socket hang up' o 'ECONNRESET'). Ese error ES el resultado esperado. Detrás de Cloud Run u otro proxy, lo esperable es un 502/503 del proxy en lugar del corte. Esta carpeta se excluye de `make postman` y del CI.",
+      "item": [
+        {
+          "name": "connection-reset → conexión reseteada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "connection-reset"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          }
+        },
+        {
+          "name": "empty-response → respuesta vacía",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "empty-response"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          }
+        },
+        {
+          "name": "malformed-response → 200 + datos corruptos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-Fault",
+                "value": "malformed-response"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/abcd-1234-6789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "abcd-1234-6789"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
