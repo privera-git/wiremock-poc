@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: API de Pagos (mock)
+  version: 1.0.0
+  description: |
+    Contrato de una API de pagos **ficticia**, simulada con WireMock.
+    No representa un sistema real: sirve como prueba de concepto para mostrar
+    cómo se modelan respuestas exitosas, casos de borde y fallas de una dependencia.
+
+    Todas las respuestas de error usan el esquema `Error` (`code` estable + `error` legible).
+    El header `X-Mock-Fault` existe **solo en el mock** y permite inyectar fallas
+    en cualquier endpoint (ver README).
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://localhost:8080
+    description: Mock local (make run)
+# El mock es público y no exige autenticación (decisión explícita de la PoC).
+security: []
+tags:
+  - name: pagos
+    description: Registro y consulta de pagos
+  - name: operación
+    description: Endpoints de soporte operacional
+paths:
+  /payments:
+    post:
+      tags: [pagos]
+      operationId: registrarPago
+      summary: Registra un pago en CLP
+      parameters:
+        - $ref: '#/components/parameters/MockFault'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+            examples:
+              valido:
+                value: { amount: 15000, currency: CLP }
+      responses:
+        '201':
+          description: Pago registrado (queda en estado PENDING)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example: { id: 3f9a-0b1c-77de, amount: 15000, currency: CLP, status: PENDING }
+        '400':
+          description: |
+            Solicitud rechazada. Códigos posibles:
+            `MONTO_INVALIDO`, `MONTO_NO_ENTERO`, `MONEDA_NO_SOPORTADA`, `SOLICITUD_INVALIDA`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                montoInvalido:
+                  value: { code: MONTO_INVALIDO, error: "el monto debe ser mayor a cero" }
+                montoNoEntero:
+                  value: { code: MONTO_NO_ENTERO, error: "el monto debe ser un entero (CLP no admite decimales)" }
+                monedaNoSoportada:
+                  value: { code: MONEDA_NO_SOPORTADA, error: "moneda no soportada" }
+                solicitudInvalida:
+                  value: { code: SOLICITUD_INVALIDA, error: "cuerpo de la solicitud inválido" }
+        '405':
+          $ref: '#/components/responses/MetodoNoPermitido'
+        '422':
+          description: El monto supera el máximo permitido por transacción
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: { code: MONTO_EXCEDE_LIMITE, error: "el monto excede el máximo permitido (10000000 CLP)" }
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+        '503':
+          $ref: '#/components/responses/NoDisponible'
+        '504':
+          $ref: '#/components/responses/TiempoAgotado'
+  /payments/{id}:
+    get:
+      tags: [pagos]
+      operationId: consultarPago
+      summary: Consulta el estado de un pago
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PaymentId'
+          examples:
+            aprobado:
+              value: abcd-1234-6789
+            pendiente:
+              value: abcd-1234-0001
+            rechazado:
+              value: abcd-1234-0002
+            inexistente:
+              value: ffff-0000-0000
+        - $ref: '#/components/parameters/MockFault'
+      responses:
+        '200':
+          description: Pago encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example: { id: abcd-1234-6789, amount: 15000, currency: CLP, status: APPROVED }
+        '400':
+          description: El identificador no cumple el formato `xxxx-xxxx-xxxx` (hexadecimal en minúsculas)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: { code: ID_INVALIDO, error: "formato de identificador inválido (esperado xxxx-xxxx-xxxx, hexadecimal en minúsculas)" }
+        '404':
+          description: No existe un pago con ese identificador
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: { code: PAGO_NO_ENCONTRADO, error: "pago no encontrado" }
+        '405':
+          $ref: '#/components/responses/MetodoNoPermitido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+        '503':
+          $ref: '#/components/responses/NoDisponible'
+        '504':
+          $ref: '#/components/responses/TiempoAgotado'
+  /health:
+    get:
+      tags: [operación]
+      operationId: salud
+      summary: Verificación de disponibilidad
+      responses:
+        '200':
+          description: El servicio está disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [UP]
+components:
+  parameters:
+    MockFault:
+      name: X-Mock-Fault
+      in: header
+      required: false
+      description: |
+        **Solo mock.** Inyecta una falla en lugar de la respuesta normal.
+        Valores no reconocidos se ignoran. `connection-reset`, `empty-response`
+        y `malformed-response` fallan a nivel de conexión (sin respuesta HTTP válida).
+      schema:
+        type: string
+        enum:
+          - error-500
+          - unavailable-503
+          - rate-limit-429
+          - timeout
+          - connection-reset
+          - empty-response
+          - malformed-response
+  schemas:
+    PaymentId:
+      type: string
+      pattern: '^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}$'
+      example: abcd-1234-6789
+    PaymentRequest:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10000000
+          description: Monto en pesos chilenos, entero (CLP no tiene decimales)
+        currency:
+          type: string
+          enum: [CLP]
+          description: Única moneda soportada; sensible a mayúsculas
+    Payment:
+      type: object
+      required: [id, amount, currency, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/PaymentId'
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          enum: [CLP]
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+    Error:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          description: Código estable, apto para lógica del consumidor
+          enum:
+            - MONTO_INVALIDO
+            - MONTO_NO_ENTERO
+            - MONTO_EXCEDE_LIMITE
+            - MONEDA_NO_SOPORTADA
+            - SOLICITUD_INVALIDA
+            - ID_INVALIDO
+            - PAGO_NO_ENCONTRADO
+            - METODO_NO_PERMITIDO
+            - RECURSO_NO_ENCONTRADO
+            - LIMITE_EXCEDIDO
+            - ERROR_INTERNO
+            - SERVICIO_NO_DISPONIBLE
+            - TIEMPO_AGOTADO
+        error:
+          type: string
+          description: Mensaje legible para personas (no usar en lógica)
+  headers:
+    RetryAfter:
+      description: Segundos sugeridos antes de reintentar
+      schema:
+        type: integer
+  responses:
+    MetodoNoPermitido:
+      description: Método HTTP no soportado para el recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: { code: METODO_NO_PERMITIDO, error: "método no permitido para este recurso" }
+    LimiteExcedido:
+      description: 'Demasiadas solicitudes (inyectable con `X-Mock-Fault: rate-limit-429`)'
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: { code: LIMITE_EXCEDIDO, error: "demasiadas solicitudes" }
+    ErrorInterno:
+      description: 'Error interno (inyectable con `X-Mock-Fault: error-500`)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: { code: ERROR_INTERNO, error: "error interno" }
+    NoDisponible:
+      description: 'Servicio no disponible (inyectable con `X-Mock-Fault: unavailable-503`)'
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: { code: SERVICIO_NO_DISPONIBLE, error: "servicio temporalmente no disponible" }
+    TiempoAgotado:
+      description: 'Respuesta tras 10 segundos (inyectable con `X-Mock-Fault: timeout`)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: { code: TIEMPO_AGOTADO, error: "la dependencia no respondió a tiempo" }
