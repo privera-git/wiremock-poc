@@ -1,0 +1,35 @@
+{
+  "name": "POST /payments: pago válido (201)",
+  "priority": 5,
+  "request": {
+    "url": "/payments",
+    "method": "POST",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": {
+          "expression": "$.amount",
+          "matches": "^[1-9][0-9]*$"
+        }
+      },
+      {
+        "matchesJsonPath": "$[?(@.amount > 0 && @.amount <= 10000000)]"
+      },
+      {
+        "matchesJsonPath": {
+          "expression": "$.currency",
+          "equalTo": "CLP"
+        }
+      }
+    ]
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"id\":\"{{randomValue length=4 type='HEXADECIMAL'}}-{{randomValue length=4 type='HEXADECIMAL'}}-{{randomValue length=4 type='HEXADECIMAL'}}\",\"amount\":{{jsonPath request.body '$.amount'}},\"currency\":\"CLP\",\"status\":\"PENDING\"}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

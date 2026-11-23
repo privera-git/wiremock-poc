@@ -1,0 +1,16 @@
+{
+  "name": "Falla: conexión reseteada",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "connection-reset"
+      }
+    }
+  },
+  "response": {
+    "fault": "CONNECTION_RESET_BY_PEER"
+  }
+}

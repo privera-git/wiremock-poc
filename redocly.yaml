@@ -1,0 +1,7 @@
+extends:
+  - recommended
+rules:
+  # El servidor declarado es el mock local; la URL de Cloud Run la define el despliegue.
+  no-server-example.com: off
+  # /health no tiene respuestas 4xx por diseño.
+  operation-4xx-response: off

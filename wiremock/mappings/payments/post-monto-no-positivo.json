@@ -1,0 +1,23 @@
+{
+  "name": "POST /payments: monto <= 0 (400)",
+  "priority": 2,
+  "request": {
+    "url": "/payments",
+    "method": "POST",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.amount <= 0)]"
+      }
+    ]
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "MONTO_INVALIDO",
+      "error": "el monto debe ser mayor a cero"
+    }
+  }
+}

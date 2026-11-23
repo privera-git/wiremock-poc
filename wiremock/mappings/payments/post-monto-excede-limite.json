@@ -1,0 +1,23 @@
+{
+  "name": "POST /payments: monto > 10.000.000 (422)",
+  "priority": 2,
+  "request": {
+    "url": "/payments",
+    "method": "POST",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.amount > 10000000)]"
+      }
+    ]
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "MONTO_EXCEDE_LIMITE",
+      "error": "el monto excede el máximo permitido (10000000 CLP)"
+    }
+  }
+}

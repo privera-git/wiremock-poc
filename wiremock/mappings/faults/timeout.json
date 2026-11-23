@@ -1,0 +1,24 @@
+{
+  "name": "Falla: respuesta lenta (10 s, luego 504)",
+  "priority": 1,
+  "request": {
+    "urlPattern": "/.*",
+    "method": "ANY",
+    "headers": {
+      "X-Mock-Fault": {
+        "equalTo": "timeout"
+      }
+    }
+  },
+  "response": {
+    "status": 504,
+    "fixedDelayMilliseconds": 10000,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "code": "TIEMPO_AGOTADO",
+      "error": "la dependencia no respondió a tiempo"
+    }
+  }
+}
